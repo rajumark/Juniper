@@ -39,4 +39,7 @@ data class CommandResult(
 )
 
 /** Raised when adb cannot run, times out, or exits with a non-zero code. */
-class AdbException(message: String, cause: Throwable? = null) : Exception(message, cause)
+open class AdbException(message: String, cause: Throwable? = null) : Exception(message, cause)
+
+/** Raised when the adb executable cannot be started at all (not installed, or not on the PATH). */
+class AdbNotFoundException(message: String, cause: Throwable? = null) : AdbException(message, cause)

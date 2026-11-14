@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copy icon, converted from content_copy (Material Symbols, 18dp). Tinted at use site. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="18dp"
+    android:height="18dp"
+    android:viewportWidth="18"
+    android:viewportHeight="18">
+    <group android:translateX="-1" android:translateY="-1">
+        <path
+            android:fillColor="#FF000000"
+            android:pathData="M7.5,15q-0.62,0-1.06-0.44T6,13.5V3.5Q6,2.88 6.44,2.44T7.5,2h8q0.62,0 1.06,0.44T17,3.5v10q0,0.62-0.44,1.06T15.5,15h-8Zm0-1.5h8V3.5h-8v10ZM4.5,18q-0.62,0-1.06-0.44T3,16.5V5H4.5V16.5H14V18H4.5Zm3-4.5V3.5v10Z" />
+    </group>
+</vector>

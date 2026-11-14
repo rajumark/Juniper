@@ -24,7 +24,10 @@ import kotlinx.serialization.json.Json
 import java.io.IOException
 
 /** Raised when Ollama is unreachable, returns an HTTP error, or sends a malformed response. */
-class OllamaException(message: String, cause: Throwable? = null) : Exception(message, cause)
+open class OllamaException(message: String, cause: Throwable? = null) : Exception(message, cause)
+
+/** Raised when no Ollama server answers at the configured address (usually: Ollama is not running). */
+class OllamaUnreachableException(message: String, cause: Throwable? = null) : OllamaException(message, cause)
 
 /**
  * Client for the Ollama HTTP API running on this machine.
@@ -99,7 +102,7 @@ class OllamaClient(
     private suspend fun <T> wrapIo(block: suspend () -> T): T = try {
         block()
     } catch (e: IOException) {
-        throw OllamaException("Cannot reach Ollama at $baseUrl. Is it running?", e)
+        throw OllamaUnreachableException("Cannot reach Ollama at $baseUrl. Is it running?", e)
     }
 
     companion object {

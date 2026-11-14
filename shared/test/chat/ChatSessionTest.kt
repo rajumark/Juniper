@@ -2,16 +2,21 @@ package raju.shingadiya.juniper.chat
 
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.MockRequestHandleScope
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.engine.mock.respondError
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.request.HttpResponseData
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.utils.io.ByteReadChannel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
+import raju.shingadiya.juniper.db.SqliteDatabase
 import raju.shingadiya.juniper.ollama.OllamaClient
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -22,9 +27,11 @@ class ChatSessionTest {
 
     private val jsonHeaders = headersOf(HttpHeaders.ContentType, "application/json")
     private val sentBodies = mutableListOf<String>()
+    private lateinit var repository: SqliteChatRepository
+    private lateinit var client: OllamaClient
 
-    private fun session(
-        handler: (String) -> io.ktor.client.engine.mock.MockRequestHandleScope.() -> io.ktor.client.request.HttpResponseData,
+    private suspend fun session(
+        handler: (String) -> MockRequestHandleScope.() -> HttpResponseData,
         systemPrompt: String? = null,
     ): ChatSession {
         val engine = MockEngine { request ->
@@ -32,10 +39,20 @@ class ChatSessionTest {
             handler(sentBodies.last()).invoke(this)
         }
         val http = HttpClient(engine) { install(ContentNegotiation) { json(OllamaClient.json) } }
-        return ChatSession(OllamaClient(baseUrl = "http://test", httpClient = http), model = "qwen2.5:7b", systemPrompt = systemPrompt)
+        client = OllamaClient(baseUrl = "http://test", httpClient = http)
+        repository = SqliteChatRepository(SqliteDatabase.open("jdbc:sqlite::memory:"))
+        val chat = repository.createChat(model = "qwen2.5:7b")
+        return ChatSession(
+            client = client,
+            repository = repository,
+            scope = CoroutineScope(Dispatchers.Unconfined),
+            chatId = chat.id,
+            model = "qwen2.5:7b",
+            systemPrompt = systemPrompt,
+        )
     }
 
-    private fun streamOf(vararg fragments: String): io.ktor.client.engine.mock.MockRequestHandleScope.() -> io.ktor.client.request.HttpResponseData {
+    private fun streamOf(vararg fragments: String): MockRequestHandleScope.() -> HttpResponseData {
         val lines = fragments.map { """{"model":"m","message":{"role":"assistant","content":"$it"},"done":false}""" } +
             """{"model":"m","message":{"role":"assistant","content":""},"done":true,"done_reason":"stop"}"""
         return {
@@ -129,12 +146,73 @@ class ChatSessionTest {
     }
 
     @Test
-    fun `clear removes all messages`() = runTest {
+    fun `clear removes all messages from memory and storage`() = runTest {
         val session = session(handler = { streamOf("x") })
         session.send("hi")
 
         session.clear()
 
         assertTrue(session.messages.value.isEmpty())
+        assertTrue(repository.loadMessages(session.chatId).isEmpty())
+    }
+
+    @Test
+    fun `replies are saved to the repository`() = runTest {
+        val session = session(handler = { streamOf("Hel", "lo") })
+
+        session.send("hi")
+
+        assertEquals(session.messages.value, repository.loadMessages(session.chatId))
+    }
+
+    @Test
+    fun `error replies are saved with the error flag`() = runTest {
+        val session = session(handler = { { respondError(HttpStatusCode.InternalServerError, "model crashed") } })
+
+        session.send("hello")
+
+        val saved = repository.loadMessages(session.chatId)
+        assertEquals(2, saved.size)
+        assertTrue(saved[1].isError)
+    }
+
+    @Test
+    fun `first message becomes the chat title`() = runTest {
+        val session = session(handler = { streamOf("ok") })
+
+        session.send("  Explain coroutines in Kotlin  ")
+
+        assertEquals("Explain coroutines in Kotlin", repository.chats.value.single().title)
+    }
+
+    @Test
+    fun `long first message is shortened for the title`() = runTest {
+        val session = session(handler = { streamOf("ok") })
+
+        session.send("a".repeat(100))
+
+        val title = repository.chats.value.single().title
+        assertTrue(title.length <= 41, title)
+        assertTrue(title.endsWith("…"), title)
+    }
+
+    @Test
+    fun `a reopened session loads the saved history`() = runTest {
+        val session = session(handler = { streamOf("saved reply") })
+        session.send("remember me")
+
+        val reopened = ChatSession(
+            client = client,
+            repository = repository,
+            scope = CoroutineScope(Dispatchers.Unconfined),
+            chatId = session.chatId,
+            model = session.model,
+            initialMessages = repository.loadMessages(session.chatId),
+        )
+
+        assertEquals(
+            listOf(ChatBubble("user", "remember me"), ChatBubble("assistant", "saved reply")),
+            reopened.messages.value,
+        )
     }
 }

@@ -1,5 +1,8 @@
 package raju.shingadiya.juniper.chat
 
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +20,13 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import org.jetbrains.compose.resources.painterResource
+import raju.shingadiya.juniper.resources.Res
+import raju.shingadiya.juniper.resources.ic_copy
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
@@ -34,6 +44,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
@@ -43,21 +54,24 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
+import androidx.compose.ui.text.style.TextOverflow
 import raju.shingadiya.juniper.ui.JuniperSpacing
 
-/** Chat window with a message list and an input box. Talks to the model through [session]. */
+/** Right pane: the open chat's messages and input box. Talks to the model through [session]. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatScreen(session: ChatSession, modifier: Modifier = Modifier) {
+fun ChatScreen(
+    session: ChatSession,
+    title: String,
+    modifier: Modifier = Modifier,
+    chipBar: @Composable () -> Unit = {},
+) {
     val messages by session.messages.collectAsState()
     val isSending by session.isSending.collectAsState()
-    val scope = rememberCoroutineScope()
+    val model by session.currentModel.collectAsState()
     val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
     var input by remember { mutableStateOf("") }
-    var replyJob by remember { mutableStateOf<Job?>(null) }
 
     // Keep the newest message in view while a reply streams in.
     LaunchedEffect(messages.size, messages.lastOrNull()?.content) {
@@ -68,17 +82,19 @@ fun ChatScreen(session: ChatSession, modifier: Modifier = Modifier) {
         val text = input.trim()
         if (text.isEmpty() || isSending) return
         input = ""
-        replyJob = scope.launch { session.send(text) }
+        session.submit(text)
     }
 
     Scaffold(
         modifier = modifier,
         topBar = {
             TopAppBar(
-                title = { Text("Juniper · ${session.model}") },
+                title = {
+                    Text(text = title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                },
                 actions = {
                     TextButton(
-                        onClick = { replyJob?.cancel(); session.clear() },
+                        onClick = { scope.launch { session.clear() } },
                         enabled = !isSending,
                     ) {
                         Text("Clear")
@@ -87,10 +103,14 @@ fun ChatScreen(session: ChatSession, modifier: Modifier = Modifier) {
             )
         },
         bottomBar = {
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(JuniperSpacing.lg),
+                verticalArrangement = Arrangement.spacedBy(JuniperSpacing.sm),
+            ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 OutlinedTextField(
@@ -112,14 +132,16 @@ fun ChatScreen(session: ChatSession, modifier: Modifier = Modifier) {
                 )
                 Spacer(Modifier.width(JuniperSpacing.sm))
                 if (isSending) {
-                    Button(onClick = { replyJob?.cancel() }) {
+                    Button(onClick = session::stop) {
                         Text("Stop")
                     }
                 } else {
-                    Button(onClick = ::submit, enabled = input.isNotBlank()) {
+                    Button(onClick = ::submit, enabled = input.isNotBlank() && model.isNotBlank()) {
                         Text("Send")
                     }
                 }
+            }
+            chipBar()
             }
         },
     ) { padding ->
@@ -144,10 +166,10 @@ fun ChatScreen(session: ChatSession, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun EmptyState(modifier: Modifier = Modifier) {
+fun EmptyState(text: String = "Ask the local model anything.", modifier: Modifier = Modifier) {
     Box(modifier = modifier.fillMaxSize().padding(JuniperSpacing.lg), contentAlignment = Alignment.Center) {
         Text(
-            text = "Ask the local model anything.",
+            text = text,
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -168,21 +190,49 @@ private fun MessageBubble(bubble: ChatBubble) {
         bubble.isUser -> colors.onPrimaryContainer
         else -> colors.onSurfaceVariant
     }
+    val interactionSource = remember { MutableInteractionSource() }
+    val hovered by interactionSource.collectIsHoveredAsState()
+    val clipboard = LocalClipboardManager.current
+
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .hoverable(interactionSource),
         horizontalArrangement = if (bubble.isUser) Arrangement.End else Arrangement.Start,
     ) {
-        Card(
-            colors = CardDefaults.cardColors(containerColor = containerColor),
-            modifier = Modifier.widthIn(max = JuniperSpacing.bubbleMaxWidth),
-        ) {
-            SelectionContainer {
-                Text(
-                    text = bubble.content.ifEmpty { "…" },
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = contentColor,
-                    modifier = Modifier.padding(JuniperSpacing.md),
-                )
+        // The copy button is drawn over the corner of the bubble, so showing or hiding it never resizes anything.
+        Box(modifier = Modifier.widthIn(max = JuniperSpacing.bubbleMaxWidth)) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = containerColor),
+            ) {
+                SelectionContainer {
+                    if (bubble.isUser || bubble.isError) {
+                        Text(
+                            text = bubble.content.ifEmpty { "…" },
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = contentColor,
+                            modifier = Modifier.padding(JuniperSpacing.md),
+                        )
+                    } else {
+                        MarkdownContent(
+                            source = bubble.content.ifEmpty { "…" },
+                            color = contentColor,
+                            modifier = Modifier.padding(JuniperSpacing.md),
+                        )
+                    }
+                }
+            }
+            if (hovered && bubble.content.isNotEmpty()) {
+                IconButton(
+                    onClick = { clipboard.setText(AnnotatedString(bubble.content)) },
+                    modifier = Modifier.align(Alignment.TopEnd),
+                ) {
+                    Icon(
+                        painter = painterResource(Res.drawable.ic_copy),
+                        contentDescription = "Copy message",
+                        tint = contentColor,
+                    )
+                }
             }
         }
     }

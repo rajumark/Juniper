@@ -21,7 +21,10 @@ class ProcessCommandRunner : CommandRunner {
             val process = try {
                 ProcessBuilder(command).start()
             } catch (e: IOException) {
-                throw AdbException("Could not start '${command.first()}': ${e.message}", e)
+                throw AdbNotFoundException(
+                    "Could not run '${command.first()}' (${e.message}). Install Android platform-tools or set ANDROID_HOME.",
+                    e,
+                )
             }
             try {
                 coroutineScope {
