@@ -1,3 +1,10 @@
+# Juniper
+
+Juniper is a desktop app that uses a **local LLM** to perform actions on, or answer questions about, a connected Android device.
+
+- **Local only:** all model inference runs on this machine through [Ollama](https://ollama.com). No cloud model is used.
+- **Model:** `qwen2.5:7b` (the one model currently installed in Ollama).
+
 This is a Kotlin Multiplatform project targeting Desktop (JVM), built with the [Kotlin Toolchain](https://kotlin-toolchain.org/dev/).
 
 - [/desktopApp](./desktopApp) contains the desktop (JVM) application.
