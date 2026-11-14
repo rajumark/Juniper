@@ -33,3 +33,5 @@ Kotlin Multiplatform project targeting Desktop (JVM) with Compose Multiplatform.
 ## Working agreements
 
 - Do not commit or push without asking the user first.
+- Before every commit, check the files being committed for confidential details: passwords, API keys, tokens, private keys, `.env` values, personal file paths, or machine-specific data. If anything is found, stop, remove it or ask the user, and only then commit and push.
+- Do not commit local caches or IDE state that is specific to one machine (for example `.idea/caches/`, `.idea/workspace.xml`).
