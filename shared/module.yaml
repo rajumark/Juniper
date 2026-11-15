@@ -18,6 +18,8 @@ dependencies:
   - $libs.ktor.serialization.kotlinx.json
   - $libs.kotlinx.serialization.json
   - $libs.sqlite.jdbc
+  - $libs.koog.agents
+  - $libs.koog.ollama.client
 
 test-dependencies:
   - $libs.ktor.client.mock

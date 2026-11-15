@@ -45,7 +45,8 @@ class SqliteChatRepository(
     private val clock: () -> Long = System::currentTimeMillis,
 ) : ChatRepository {
 
-    private val lock = Any()
+    // One lock for the whole connection, shared with the agent history store, so JDBC calls never overlap.
+    private val lock: Any = connection
     private val _chats = MutableStateFlow<List<ChatSummary>>(emptyList())
     override val chats: StateFlow<List<ChatSummary>> = _chats.asStateFlow()
 
@@ -90,13 +91,21 @@ class SqliteChatRepository(
     override suspend fun loadMessages(chatId: String): List<ChatBubble> = withContext(Dispatchers.IO) {
         synchronized(lock) {
             connection.prepareStatement(
-                "SELECT role, content, is_error FROM messages WHERE chat_id = ? ORDER BY position",
+                "SELECT role, content, is_error, tool_name, tool_input FROM messages WHERE chat_id = ? ORDER BY position",
             ).use { st ->
                 st.setString(1, chatId)
                 st.executeQuery().use { rs ->
                     buildList {
                         while (rs.next()) {
-                            add(ChatBubble(role = rs.getString(1), content = rs.getString(2), isError = rs.getInt(3) != 0))
+                            add(
+                                ChatBubble(
+                                    role = rs.getString(1),
+                                    content = rs.getString(2),
+                                    isError = rs.getInt(3) != 0,
+                                    toolName = rs.getString(4),
+                                    toolInput = rs.getString(5),
+                                ),
+                            )
                         }
                     }
                 }
@@ -106,13 +115,15 @@ class SqliteChatRepository(
 
     override suspend fun appendMessage(chatId: String, position: Int, bubble: ChatBubble) = write {
         connection.prepareStatement(
-            "INSERT INTO messages (chat_id, position, role, content, is_error) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO messages (chat_id, position, role, content, is_error, tool_name, tool_input) VALUES (?, ?, ?, ?, ?, ?, ?)",
         ).use { st ->
             st.setString(1, chatId)
             st.setInt(2, position)
             st.setString(3, bubble.role)
             st.setString(4, bubble.content)
             st.setInt(5, if (bubble.isError) 1 else 0)
+            st.setString(6, bubble.toolName)
+            st.setString(7, bubble.toolInput)
             st.executeUpdate()
         }
         touch(chatId)

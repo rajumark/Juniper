@@ -1,16 +1,9 @@
 package raju.shingadiya.juniper.chat
 
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.mock.MockEngine
-import io.ktor.client.engine.mock.respondError
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.http.HttpStatusCode
-import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import raju.shingadiya.juniper.db.SqliteDatabase
-import raju.shingadiya.juniper.ollama.OllamaClient
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
@@ -18,17 +11,12 @@ import kotlin.test.assertNull
 
 class ChatWorkspaceTest {
 
-    private fun workspace(repository: ChatRepository): ChatWorkspace {
-        val http = HttpClient(MockEngine { respondError(HttpStatusCode.ServiceUnavailable) }) {
-            install(ContentNegotiation) { json(OllamaClient.json) }
-        }
-        return ChatWorkspace(
-            client = OllamaClient(baseUrl = "http://test", httpClient = http),
-            repository = repository,
-            scope = CoroutineScope(Dispatchers.Unconfined),
-            defaultModel = "qwen2.5:7b",
-        )
-    }
+    private fun workspace(repository: ChatRepository): ChatWorkspace = ChatWorkspace(
+        runner = FakeChatAgentRunner(),
+        repository = repository,
+        scope = CoroutineScope(Dispatchers.Unconfined),
+        defaultModel = "qwen2.5:7b",
+    )
 
     private fun repository() = SqliteChatRepository(SqliteDatabase.open("jdbc:sqlite::memory:"))
 

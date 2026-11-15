@@ -12,7 +12,7 @@ import java.sql.Statement
  * when the version on disk is lower than [SCHEMA_VERSION].
  */
 object SqliteDatabase {
-    const val SCHEMA_VERSION = 1
+    const val SCHEMA_VERSION = 3
 
     /** JDBC URL for the app's database file: `~/.juniper/juniper.db`. */
     fun defaultUrl(): String {
@@ -42,8 +42,20 @@ object SqliteDatabase {
             if (current < 1) {
                 createVersion1(statement)
             }
+            if (current < 2) {
+                createVersion2(statement)
+            }
+            if (current < 3) {
+                createVersion3(statement)
+            }
             statement.execute("PRAGMA user_version = $SCHEMA_VERSION")
         }
+    }
+
+    /** Version 2: tool name and input for tool-call messages. */
+    private fun createVersion2(statement: Statement) {
+        statement.execute("ALTER TABLE messages ADD COLUMN tool_name TEXT")
+        statement.execute("ALTER TABLE messages ADD COLUMN tool_input TEXT")
     }
 
     /** Version 1: chats and their messages. */
@@ -72,5 +84,19 @@ object SqliteDatabase {
             """.trimIndent(),
         )
         statement.execute("CREATE INDEX IF NOT EXISTS idx_chats_updated ON chats(updated_at DESC)")
+    }
+
+    /** Version 3: the agent's own conversation history (Koog messages, one JSON document per row). */
+    private fun createVersion3(statement: Statement) {
+        statement.execute(
+            """
+            CREATE TABLE IF NOT EXISTS agent_messages (
+                chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+                position INTEGER NOT NULL,
+                message TEXT NOT NULL,
+                PRIMARY KEY (chat_id, position)
+            )
+            """.trimIndent(),
+        )
     }
 }

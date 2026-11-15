@@ -1,5 +1,6 @@
 package raju.shingadiya.juniper.chat
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -55,6 +56,9 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.draw.rotate
+import raju.shingadiya.juniper.resources.ic_expand_more
 import raju.shingadiya.juniper.ui.JuniperSpacing
 
 /** Right pane: the open chat's messages and input box. Talks to the model through [session]. */
@@ -71,6 +75,7 @@ fun ChatScreen(
     val model by session.currentModel.collectAsState()
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    val clipboard = LocalClipboardManager.current
     var input by remember { mutableStateOf("") }
 
     // Keep the newest message in view while a reply streams in.
@@ -93,6 +98,12 @@ fun ChatScreen(
                     Text(text = title, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 },
                 actions = {
+                    IconButton(onClick = { session.trajectoryPath?.let { clipboard.setText(AnnotatedString(it)) } }) {
+                        Icon(
+                            painter = painterResource(Res.drawable.ic_copy),
+                            contentDescription = "Copy trajectory file path",
+                        )
+                    }
                     TextButton(
                         onClick = { scope.launch { session.clear() } },
                         enabled = !isSending,
@@ -179,6 +190,10 @@ fun EmptyState(text: String = "Ask the local model anything.", modifier: Modifie
 
 @Composable
 private fun MessageBubble(bubble: ChatBubble) {
+    if (bubble.isTool) {
+        ToolCallCard(bubble)
+        return
+    }
     val colors = MaterialTheme.colorScheme
     val containerColor = when {
         bubble.isError -> colors.errorContainer
@@ -232,6 +247,56 @@ private fun MessageBubble(bubble: ChatBubble) {
                         contentDescription = "Copy message",
                         tint = contentColor,
                     )
+                }
+            }
+        }
+    }
+}
+
+/** A tool the model ran on the device. Collapsed by default; expand to see its input and result. */
+@Composable
+private fun ToolCallCard(bubble: ChatBubble) {
+    var expanded by remember { mutableStateOf(false) }
+    val colors = MaterialTheme.colorScheme
+    val containerColor = if (bubble.isError) colors.errorContainer else colors.surfaceVariant
+    val contentColor = if (bubble.isError) colors.onErrorContainer else colors.onSurfaceVariant
+
+    Row(modifier = Modifier.fillMaxWidth()) {
+        Card(
+            modifier = Modifier.widthIn(max = JuniperSpacing.bubbleMaxWidth),
+            colors = CardDefaults.cardColors(containerColor = containerColor),
+        ) {
+            Column(modifier = Modifier.padding(horizontal = JuniperSpacing.md, vertical = JuniperSpacing.xs)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Tool: ${bubble.toolName.orEmpty()}",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = contentColor,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(onClick = { expanded = !expanded }) {
+                        Icon(
+                            painter = painterResource(Res.drawable.ic_expand_more),
+                            contentDescription = if (expanded) "Hide details" else "Show details",
+                            tint = contentColor,
+                            modifier = Modifier.rotate(if (expanded) 180f else 0f),
+                        )
+                    }
+                }
+                AnimatedVisibility(visible = expanded) {
+                    SelectionContainer {
+                        Column(
+                            modifier = Modifier.padding(bottom = JuniperSpacing.md),
+                            verticalArrangement = Arrangement.spacedBy(JuniperSpacing.xs),
+                        ) {
+                            bubble.toolInput?.let { input ->
+                                Text("Input", style = MaterialTheme.typography.labelMedium, color = contentColor)
+                                Text(input, style = MaterialTheme.typography.bodySmall, color = contentColor, fontFamily = FontFamily.Monospace)
+                            }
+                            Text("Result", style = MaterialTheme.typography.labelMedium, color = contentColor)
+                            Text(bubble.content, style = MaterialTheme.typography.bodySmall, color = contentColor, fontFamily = FontFamily.Monospace)
+                        }
+                    }
                 }
             }
         }

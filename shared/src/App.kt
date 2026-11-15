@@ -25,14 +25,20 @@ import raju.shingadiya.juniper.chat.EmptyState
 import raju.shingadiya.juniper.adb.AdbClient
 import raju.shingadiya.juniper.chat.SelectorBar
 import raju.shingadiya.juniper.chat.SqliteChatRepository
+import raju.shingadiya.juniper.chat.TrajectoryRecorder
 import raju.shingadiya.juniper.device.DeviceManager
 import raju.shingadiya.juniper.model.ModelManager
 import raju.shingadiya.juniper.db.SqliteDatabase
-import raju.shingadiya.juniper.ollama.OllamaClient
+import ai.koog.prompt.executor.ollama.client.OllamaClient
+import raju.shingadiya.juniper.agent.AgentHistoryStore
+import raju.shingadiya.juniper.agent.KoogChatAgentRunner
+import raju.shingadiya.juniper.model.KoogModelCatalog
 import raju.shingadiya.juniper.ui.JuniperTheme
 
 private const val DEFAULT_MODEL = ModelManager.SUGGESTED_MODEL
-private const val SYSTEM_PROMPT = "You are Juniper, a helpful assistant for Android developers."
+private const val SYSTEM_PROMPT = "You are Juniper, a helpful assistant for Android developers. " +
+    "You can read facts about the selected Android device with tools, such as its Android version, " +
+    "battery, screen and storage. Answer from the tool results and say when a tool could not give an answer."
 
 /** Root layout: chat list on the left, the open chat on the right. */
 @Composable
@@ -48,8 +54,9 @@ fun App() {
         DisposableEffect(client) {
             onDispose { client.close() }
         }
-        val modelManager = remember(client) { ModelManager(client) }
-        val deviceManager = remember { DeviceManager(AdbClient()) }
+        val modelManager = remember(client) { ModelManager(KoogModelCatalog(client)) }
+        val adb = remember { AdbClient() }
+        val deviceManager = remember(adb) { DeviceManager(adb) }
         LaunchedEffect(modelManager) { modelManager.start(this) }
         LaunchedEffect(deviceManager) { deviceManager.start(this) }
         val modelState by modelManager.state.collectAsState()
@@ -58,13 +65,25 @@ fun App() {
         DisposableEffect(database) {
             onDispose { database.close() }
         }
+        // Debug trajectories: one trajectory.jsonl per chat under ~/.juniper/chats.
+        val trajectory = remember { TrajectoryRecorder(TrajectoryRecorder.defaultDir()) }
+        DisposableEffect(trajectory) {
+            onDispose { trajectory.close() }
+        }
         val workspace = remember(database) {
             ChatWorkspace(
-                client = client,
+                // The agent reads the device selected in the device menu when each tool runs.
+                runner = KoogChatAgentRunner(
+                    client = client,
+                    history = AgentHistoryStore(database),
+                    adb = adb,
+                    selectedSerial = { deviceManager.state.value.selectedSerial },
+                ),
                 repository = SqliteChatRepository(database),
                 scope = scope,
                 defaultModel = DEFAULT_MODEL,
                 systemPrompt = SYSTEM_PROMPT,
+                trajectory = trajectory,
             )
         }
         LaunchedEffect(workspace) { workspace.start() }

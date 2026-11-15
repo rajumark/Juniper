@@ -46,6 +46,15 @@ class AdbClient(
     suspend fun startActivity(serial: String, component: String): String =
         shell(serial, "am", "start", "-n", component)
 
+    /**
+     * Runs [argv] on the device with `adb -s serial shell`. The arguments are passed as separate
+     * process arguments, never through a host shell. Returns the device's stdout.
+     */
+    suspend fun runShell(serial: String, argv: List<String>): String {
+        require(argv.isNotEmpty()) { "Command must not be empty" }
+        return shell(serial, *argv.toTypedArray())
+    }
+
     /** Captures the current screen's UI hierarchy as a flat list of elements. */
     suspend fun dumpUiHierarchy(serial: String): List<UiNode> {
         shell(serial, "uiautomator", "dump", REMOTE_DUMP_PATH)
