@@ -1,6 +1,5 @@
 package raju.shingadiya.juniper.chat
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -13,8 +12,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -24,16 +25,18 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import org.jetbrains.compose.resources.painterResource
 import raju.shingadiya.juniper.resources.Res
 import raju.shingadiya.juniper.resources.ic_copy
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -57,9 +60,6 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.draw.rotate
-import raju.shingadiya.juniper.resources.ic_expand_more
 import raju.shingadiya.juniper.resources.ic_send
 import raju.shingadiya.juniper.ui.JuniperSpacing
 
@@ -80,9 +80,12 @@ fun ChatScreen(
     val clipboard = LocalClipboardManager.current
     var input by remember { mutableStateOf("") }
 
+    // Tool calls stay in the saved history but are not shown: the chat shows only the final answer.
+    val visibleMessages = remember(messages) { messages.filterNot { it.isTool } }
+
     // Keep the newest message in view while a reply streams in.
-    LaunchedEffect(messages.size, messages.lastOrNull()?.content) {
-        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
+    LaunchedEffect(visibleMessages.size, visibleMessages.lastOrNull()?.content) {
+        if (visibleMessages.isNotEmpty()) listState.animateScrollToItem(visibleMessages.lastIndex)
     }
 
     fun submit() {
@@ -122,13 +125,22 @@ fun ChatScreen(
                     .padding(JuniperSpacing.lg),
                 verticalArrangement = Arrangement.spacedBy(JuniperSpacing.sm),
             ) {
-            Row(
+            // The composer is one pill: a borderless text field with the send button inside it.
+            Surface(
+                shape = MaterialTheme.shapes.extraLarge,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 modifier = Modifier.fillMaxWidth(),
+            ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = JuniperSpacing.lg, end = JuniperSpacing.sm, top = JuniperSpacing.xs, bottom = JuniperSpacing.xs),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                OutlinedTextField(
+                TextField(
                     value = input,
                     onValueChange = { input = it },
+                    colors = composerFieldColors(),
                     modifier = Modifier
                         .weight(1f)
                         .onPreviewKeyEvent { event ->
@@ -160,6 +172,7 @@ fun ChatScreen(
                     }
                 }
             }
+            }
             chipBar()
             }
         },
@@ -168,50 +181,59 @@ fun ChatScreen(
             if (isSending) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
-            if (messages.isEmpty()) {
+            if (visibleMessages.isEmpty()) {
                 EmptyState(modifier = Modifier.weight(1f))
             } else {
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(JuniperSpacing.lg),
-                    verticalArrangement = Arrangement.spacedBy(JuniperSpacing.sm),
+                    contentPadding = PaddingValues(horizontal = JuniperSpacing.xl, vertical = JuniperSpacing.lg),
+                    verticalArrangement = Arrangement.spacedBy(JuniperSpacing.lg),
                 ) {
-                    items(messages) { bubble -> MessageBubble(bubble) }
+                    items(visibleMessages) { bubble -> MessageBubble(bubble) }
                 }
             }
         }
     }
 }
 
+/** Composer field with no outline or fill, so it reads as part of the pill around it. */
+@Composable
+private fun composerFieldColors() = TextFieldDefaults.colors(
+    focusedContainerColor = Color.Transparent,
+    unfocusedContainerColor = Color.Transparent,
+    disabledContainerColor = Color.Transparent,
+    focusedIndicatorColor = Color.Transparent,
+    unfocusedIndicatorColor = Color.Transparent,
+    disabledIndicatorColor = Color.Transparent,
+)
+
+/** Empty chat: one centred headline on the page, with no decoration. */
 @Composable
 fun EmptyState(text: String = "Ask the local model anything.", modifier: Modifier = Modifier) {
-    Box(modifier = modifier.fillMaxSize().padding(JuniperSpacing.lg), contentAlignment = Alignment.Center) {
+    Box(modifier = modifier.fillMaxSize().padding(JuniperSpacing.xl), contentAlignment = Alignment.Center) {
         Text(
             text = text,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.displaySmall,
+            color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Center,
+            modifier = Modifier.widthIn(max = 480.dp),
         )
     }
 }
 
 @Composable
 private fun MessageBubble(bubble: ChatBubble) {
-    if (bubble.isTool) {
-        ToolCallCard(bubble)
-        return
-    }
     val colors = MaterialTheme.colorScheme
     val containerColor = when {
         bubble.isError -> colors.errorContainer
         bubble.isUser -> colors.primaryContainer
-        else -> colors.surfaceVariant
+        else -> colors.surface
     }
     val contentColor = when {
         bubble.isError -> colors.onErrorContainer
         bubble.isUser -> colors.onPrimaryContainer
-        else -> colors.onSurfaceVariant
+        else -> colors.onSurface
     }
     val interactionSource = remember { MutableInteractionSource() }
     val hovered by interactionSource.collectIsHoveredAsState()
@@ -222,91 +244,51 @@ private fun MessageBubble(bubble: ChatBubble) {
             .fillMaxWidth()
             .hoverable(interactionSource),
         horizontalArrangement = if (bubble.isUser) Arrangement.End else Arrangement.Start,
+        verticalAlignment = Alignment.Top,
     ) {
-        // The copy button is drawn over the corner of the bubble, so showing or hiding it never resizes anything.
+        // The copy action sits in a fixed slot beside the bubble, so showing it never shifts the text.
+        val copySlot: @Composable () -> Unit = {
+            Box(modifier = Modifier.size(JuniperSpacing.actionSlot), contentAlignment = Alignment.Center) {
+                if (hovered && bubble.content.isNotEmpty()) {
+                    IconButton(onClick = { clipboard.setText(AnnotatedString(bubble.content)) }) {
+                        Icon(
+                            painter = painterResource(Res.drawable.ic_copy),
+                            contentDescription = "Copy message",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
+        if (bubble.isUser) copySlot()
         Box(modifier = Modifier.widthIn(max = JuniperSpacing.bubbleMaxWidth)) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = containerColor),
-            ) {
-                SelectionContainer {
-                    if (bubble.isUser || bubble.isError) {
+            if (bubble.isUser || bubble.isError) {
+                // The user's own words and errors sit in a tonal bubble.
+                Surface(
+                    color = containerColor,
+                    contentColor = contentColor,
+                    shape = MaterialTheme.shapes.large,
+                ) {
+                    SelectionContainer {
                         Text(
                             text = bubble.content.ifEmpty { "…" },
                             style = MaterialTheme.typography.bodyLarge,
                             color = contentColor,
-                            modifier = Modifier.padding(JuniperSpacing.md),
-                        )
-                    } else {
-                        MarkdownContent(
-                            source = bubble.content.ifEmpty { "…" },
-                            color = contentColor,
-                            modifier = Modifier.padding(JuniperSpacing.md),
+                            modifier = Modifier.padding(horizontal = JuniperSpacing.lg, vertical = JuniperSpacing.md),
                         )
                     }
                 }
-            }
-            if (hovered && bubble.content.isNotEmpty()) {
-                IconButton(
-                    onClick = { clipboard.setText(AnnotatedString(bubble.content)) },
-                    modifier = Modifier.align(Alignment.TopEnd),
-                ) {
-                    Icon(
-                        painter = painterResource(Res.drawable.ic_copy),
-                        contentDescription = "Copy message",
-                        tint = contentColor,
-                    )
-                }
-            }
-        }
-    }
-}
-
-/** A tool the model ran on the device. Collapsed by default; expand to see its input and result. */
-@Composable
-private fun ToolCallCard(bubble: ChatBubble) {
-    var expanded by remember { mutableStateOf(false) }
-    val colors = MaterialTheme.colorScheme
-    val containerColor = if (bubble.isError) colors.errorContainer else colors.surfaceVariant
-    val contentColor = if (bubble.isError) colors.onErrorContainer else colors.onSurfaceVariant
-
-    Row(modifier = Modifier.fillMaxWidth()) {
-        Card(
-            modifier = Modifier.widthIn(max = JuniperSpacing.bubbleMaxWidth),
-            colors = CardDefaults.cardColors(containerColor = containerColor),
-        ) {
-            Column(modifier = Modifier.padding(horizontal = JuniperSpacing.md, vertical = JuniperSpacing.xs)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "Tool: ${bubble.toolName.orEmpty()}",
-                        style = MaterialTheme.typography.labelLarge,
+            } else {
+                // Model replies are plain reading text on the page, not a boxed card.
+                SelectionContainer {
+                    MarkdownContent(
+                        source = bubble.content.ifEmpty { "…" },
                         color = contentColor,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.padding(horizontal = JuniperSpacing.xs, vertical = JuniperSpacing.xs),
                     )
-                    IconButton(onClick = { expanded = !expanded }) {
-                        Icon(
-                            painter = painterResource(Res.drawable.ic_expand_more),
-                            contentDescription = if (expanded) "Hide details" else "Show details",
-                            tint = contentColor,
-                            modifier = Modifier.rotate(if (expanded) 180f else 0f),
-                        )
-                    }
-                }
-                AnimatedVisibility(visible = expanded) {
-                    SelectionContainer {
-                        Column(
-                            modifier = Modifier.padding(bottom = JuniperSpacing.md),
-                            verticalArrangement = Arrangement.spacedBy(JuniperSpacing.xs),
-                        ) {
-                            bubble.toolInput?.let { input ->
-                                Text("Input", style = MaterialTheme.typography.labelMedium, color = contentColor)
-                                Text(input, style = MaterialTheme.typography.bodySmall, color = contentColor, fontFamily = FontFamily.Monospace)
-                            }
-                            Text("Result", style = MaterialTheme.typography.labelMedium, color = contentColor)
-                            Text(bubble.content, style = MaterialTheme.typography.bodySmall, color = contentColor, fontFamily = FontFamily.Monospace)
-                        }
-                    }
                 }
             }
         }
+        if (!bubble.isUser) copySlot()
     }
 }

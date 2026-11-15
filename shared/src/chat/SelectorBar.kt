@@ -94,6 +94,7 @@ private fun ModelChip(
                 // No usable model yet: explain what to install instead of opening an empty menu.
                 if (hasUsableSelection) menuOpen = true else guideOpen = true
             },
+            shape = MaterialTheme.shapes.extraLarge,
             label = { Text("Model: $label ▾") },
         )
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
@@ -274,6 +275,7 @@ private fun DeviceChip(
     Box {
         AssistChip(
             onClick = { menuOpen = true },
+            shape = MaterialTheme.shapes.extraLarge,
             label = { Text("Device: $label ▾") },
         )
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {

@@ -12,7 +12,7 @@ import java.sql.Statement
  * when the version on disk is lower than [SCHEMA_VERSION].
  */
 object SqliteDatabase {
-    const val SCHEMA_VERSION = 3
+    const val SCHEMA_VERSION = 4
 
     /** JDBC URL for the app's database file: `~/.juniper/juniper.db`. */
     fun defaultUrl(): String {
@@ -48,8 +48,23 @@ object SqliteDatabase {
             if (current < 3) {
                 createVersion3(statement)
             }
+            if (current < 4) {
+                createVersion4(statement)
+            }
             statement.execute("PRAGMA user_version = $SCHEMA_VERSION")
         }
+    }
+
+    /** Version 4: app settings as key/value pairs (theme mode, accent colour). */
+    private fun createVersion4(statement: Statement) {
+        statement.execute(
+            """
+            CREATE TABLE IF NOT EXISTS app_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+            """.trimIndent(),
+        )
     }
 
     /** Version 2: tool name and input for tool-call messages. */

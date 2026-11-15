@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- More (vertical dots) icon, converted from more_vert (Material Symbols, 18dp). Tinted at use site. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="18dp"
+    android:height="18dp"
+    android:viewportWidth="18"
+    android:viewportHeight="18">
+    <group android:translateX="-1" android:translateY="-1">
+        <path
+            android:fillColor="#FF000000"
+            android:pathData="M10,16q-0.62,0-1.06-0.44T8.5,14.5q0-0.62 0.44-1.06T10,13t1.06,0.44T11.5,14.5t-0.44,1.06T10,16Zm0-4.5q-0.62,0-1.06-0.44T8.5,10q0-0.62 0.44-1.06T10,8.5t1.06,0.44T11.5,10t-0.44,1.06T10,11.5ZM10,7Q9.38,7 8.94,6.56T8.5,5.5T8.94,4.44T10,4t1.06,0.44T11.5,5.5T11.06,6.56T10,7Z" />
+    </group>
+</vector>

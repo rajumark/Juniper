@@ -70,7 +70,7 @@ data class DeviceSnapshot(
  */
 class DeviceManager(
     private val adb: AdbClient,
-    private val pollInterval: Duration = 3.seconds,
+    private val pollInterval: Duration = 5.seconds,
 ) {
     private val _state = MutableStateFlow(DeviceSnapshot())
     val state: StateFlow<DeviceSnapshot> = _state.asStateFlow()
