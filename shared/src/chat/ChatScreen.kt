@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -59,6 +60,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.draw.rotate
 import raju.shingadiya.juniper.resources.ic_expand_more
+import raju.shingadiya.juniper.resources.ic_send
 import raju.shingadiya.juniper.ui.JuniperSpacing
 
 /** Right pane: the open chat's messages and input box. Talks to the model through [session]. */
@@ -147,8 +149,14 @@ fun ChatScreen(
                         Text("Stop")
                     }
                 } else {
-                    Button(onClick = ::submit, enabled = input.isNotBlank() && model.isNotBlank()) {
-                        Text("Send")
+                    FilledIconButton(
+                        onClick = ::submit,
+                        enabled = input.isNotBlank() && model.isNotBlank(),
+                    ) {
+                        Icon(
+                            painter = painterResource(Res.drawable.ic_send),
+                            contentDescription = "Send message",
+                        )
                     }
                 }
             }
